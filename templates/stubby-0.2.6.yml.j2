@@ -1,0 +1,211 @@
+{{ ansible_managed | comment }}
+
+{% macro get_value(name, quoted=false) %}
+{%- if name in cfg and cfg[name] is not none %}
+{{ name }}: {{ '"' ~ cfg[name] ~ '"' if quoted else cfg[name] }}
+{%- else %}
+# {{ name }}:
+{%- endif %}
+{% endmacro %}
+
+################################################################################
+######################## STUBBY YAML CONFIG FILE ###############################
+################################################################################
+# This is a yaml version of the stubby configuration file (it replaces the
+# json based stubby.conf file used in earlier versions of getdns/stubby).
+#
+# For more information see
+# https://dnsprivacy.org/wiki/display/DP/Configuring+Stubby
+#
+# This format does not fully support all yaml features - the restrictions are:
+#   - the outer-most data structure must be a yaml mapping
+#   - mapping keys must be yaml scalars
+#   - plain scalars will be converted to json unchanged
+#   - non-plain scalars (quoted, double-quoted, wrapped) will be interpreted
+#     as json strings, i.e. double quoted.
+#   - yaml tags are not supported
+#   - IPv6 addresses ending in :: are not yet supported (use ::0)
+#
+# Also beware that yaml is sensitive to the indentation at the start of each
+# line so if you encounter errors when parsing the config file then please check
+# that. We will add better checking but a useful online tool to check yaml
+# format is here (it also converts yaml to json)
+# https://yaml-online-parser.appspot.com/
+#
+# Note that we plan to introduce a more compact format for defining upstreams
+# in future: https://github.com/getdnsapi/stubby/issues/79
+
+################################### LOGGING ####################################
+# Logging is currently configured at runtime using command line arguments. See
+# > stubby -h
+# for details.
+
+########################## BASIC & PRIVACY SETTINGS ############################
+# Specifies whether to run as a recursive or stub resolver
+# For stubby this MUST be set to GETDNS_RESOLUTION_STUB
+resolution_type: GETDNS_RESOLUTION_STUB
+
+# Ordered list composed of one or more transport protocols:
+# GETDNS_TRANSPORT_UDP, GETDNS_TRANSPORT_TCP or GETDNS_TRANSPORT_TLS
+# If only one transport value is specified it will be the only transport used.
+# Should it not be available basic resolution will fail.
+# Fallback transport options are specified by including multiple values in the
+# list.  Strict mode (see below) should use only GETDNS_TRANSPORT_TLS.
+dns_transport_list:
+{% for dtl in cfg.dns_transport_list %}
+  - {{ dtl }}
+{% endfor %}
+
+# Selects Strict or Opportunistic Usage profile as described in
+# https://datatracker.ietf.org/doc/draft-ietf-dprive-dtls-and-tls-profiles/
+# Strict mode requires that authentication information for the upstreams is
+# specified below. Opportunistic may fallback to clear text DNS if UDP or TCP
+# is included in the transport list above.
+# For Strict use        GETDNS_AUTHENTICATION_REQUIRED
+# For Opportunistic use GETDNS_AUTHENTICATION_NONE
+{{ get_value('tls_authentication') }}
+
+# EDNS0 option to pad the size of the DNS query to the given blocksize
+# 128 is currently recommended by
+# https://tools.ietf.org/html/draft-ietf-dprive-padding-policy-03
+{{ get_value('tls_query_padding_blocksize') }}
+
+# EDNS0 option for ECS client privacy as described in Section 7.1.2 of
+# https://tools.ietf.org/html/rfc7871
+{{ get_value('edns_client_subnet_private') }}
+
+############################# CONNECTION SETTINGS ##############################
+# Set to 1 to instruct stubby to distribute queries across all available name
+# servers - this will use multiple simultaneous connections which can give
+# better performance in most (but not all) cases.
+# Set to 0 to treat the upstreams below as an ordered list and use a single
+# upstream until it becomes unavailable, then use the next one.
+{{ get_value('round_robin_upstreams') }}
+
+# EDNS0 option for keepalive idle timeout in milliseconds as specified in
+# https://tools.ietf.org/html/rfc7828
+# This keeps idle TLS connections open to avoid the overhead of opening a new
+# connection for every query.
+{{ get_value('idle_timeout') }}
+
+# Control the maximum number of connection failures that will be permitted
+# before Stubby backs-off from using an individual upstream (default 2)
+{{ get_value('tls_connection_retries') }}
+
+# Control the maximum time in seconds Stubby will back-off from using an
+# individual upstream after failures under normal circumstances (default 3600)
+{{ get_value('tls_backoff_time') }}
+
+# Specify the location for CA certificates used for verification purposes are
+# located - this overrides the OS specific default location.
+{{ get_value('tls_ca_path', true) }}
+
+# Limit the total number of outstanding queries permitted
+{{ get_value('limit_outstanding_queries') }}
+
+# Specify the timeout in milliseconds on getting a response to an individual
+# request (default 5000)
+{{ get_value('timeout') }}
+
+# Set the acceptable ciphers for DNS over TLS.  With OpenSSL 1.1.1 this list is
+# for TLS1.2 and older only. Ciphers for TLS1.3 should be set with the
+# tls_ciphersuites option. This option can also be given per upstream.
+{{ get_value('tls_cipher_list', true) }}
+
+# Set the acceptable cipher for DNS over TLS1.3. OpenSSL >= 1.1.1 is required
+# for this option. This option can also be given per upstream.
+{{ get_value('tls_ciphersuites', true) }}
+
+# Set the minimum acceptable TLS version. Works with OpenSSL >= 1.1.1 only.
+# This option can also be given per upstream.
+{{ get_value('tls_min_version') }}
+
+# Set the maximum acceptable TLS version. Works with OpenSSL >= 1.1.1 only.
+# This option can also be given per upstream.
+{{ get_value('tls_max_version') }}
+
+################################ LISTEN ADDRESS ################################
+# Set the listen addresses for the stubby DAEMON. This specifies localhost IPv4
+# and IPv6. It will listen on port 53 by default. Use <IP_address>@<port> to
+# specify a different port
+listen_addresses:
+{% for addr in cfg.listen_addresses %}
+  - {{ addr }}
+{% endfor %}
+
+############################### DNSSEC SETTINGS ################################
+# Require DNSSEC validation. This will withhold answers with BOGUS DNSSEC
+# status and answers that could not be validated (i.e. with DNSSEC status
+# INDETERMINATE). Beware that if no DNSSEC trust-anchor is provided, or if
+# stubby is not able to fetch and validate the DNSSEC trust-anchor itself,
+# (using Zero configuration DNSSEC) stubby will not return answers at all.
+# If DNSSEC validation is required, a trust-anchor is also required.
+{{ get_value('dnssec') }}
+
+# Stubby tries to fetch and validate the DNSSEC root trust anchor on the fly
+# when needed (Zero configuration DNSSEC), but only if it can store then
+# somewhere.  The default location to store these files is the ".getdns"
+# subdirectory in the user's home directory on Unixes, and the %appdata%\getdns
+# directory on Windows. If there is no home directory, or
+# the required subdirectory could not be created (or is not present), Stubby
+# will fall back to the current working directory to try to store the
+# trust-anchor files.
+#
+# When stubby runs as a special system-level user without a home directory
+# however (such as in setups using systemd), it is recommended that an explicit
+# location for storing the trust-anchor files is provided that is writable (and
+# readable) by that special system user.
+appdata_dir: "/var/cache/stubby"
+
+# When Zero configuration DNSSEC failed, because of network unavailability or
+# failure to write to the appdata directory, stubby will backoff trying to
+# refetch the DNSSEC trust-anchor for a specified amount of time  expressed
+# in milliseconds (which defaults to two and a half seconds).
+{{ get_value('trust_anchors_backoff_time') }}
+
+# Specify the location of the installed trust anchor file (leave commented out
+# for zero configuration DNSSEC)
+{{ get_value('dnssec_trust_anchors', true) }}
+
+
+##################################  UPSTREAMS  ################################
+# Specify the list of upstream recursive name servers to send queries to
+# In Strict mode upstreams need either a tls_auth_name or a tls_pubkey_pinset
+# so the upstream can be authenticated.
+# The list below includes all the available test servers but only has the subset
+# operated the stubby/getdns developers enabled. You can enable any of the
+# others you want to use by uncommenting the relevant section. See:
+# https://dnsprivacy.org/wiki/display/DP/DNS+Privacy+Test+Servers
+# If you don't have IPv6 then comment then out those upstreams.
+# In Opportunistic mode they only require an IP address in address_data.
+# The information for an upstream can include the following:
+# - address_data: IPv4 or IPv6 address of the upstream
+#   port: Port for UDP/TCP (default is 53)
+#   tls_auth_name: Authentication domain name checked against the server
+#                  certificate
+#   tls_pubkey_pinset: An SPKI pinset verified against the keys in the server
+#                      certificate
+#     - digest: Only "sha256" is currently supported
+#       value: Base64 encoded value of the sha256 fingerprint of the public
+#              key
+#   tls_port: Port for TLS (default is 853)
+{% macro format_server_entry(server) %}
+  - address_data: {{ server.address_data }}
+    {% if server.tls_port is defined %}
+    tls_port: "{{ server.tls_port }}"
+    {% endif %}
+    {% if server.tls_auth_name is defined %}
+    tls_auth_name: "{{ server.tls_auth_name }}"
+    {% endif %}
+    {% if server.tls_pubkey_pinset is defined %}
+    tls_pubkey_pinset:
+      {% for pubkey in server.tls_pubkey_pinset %}
+      - digest: "{{ pubkey.digest }}"
+        value: {{ pubkey.value }}
+      {% endfor %}
+    {% endif %}
+{% endmacro %}
+upstream_recursive_servers:
+{% for server in cfg.upstream_recursive_servers %}
+{{ format_server_entry(server) }}
+{% endfor %}

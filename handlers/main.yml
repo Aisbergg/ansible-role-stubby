@@ -1,0 +1,6 @@
+---
+- name: restart stubby
+  service:
+    name: "{{ stubby_service_name }}"
+    state: restarted
+  when: stubby_service_enabled or stubby_service_state in ["started", "restarted", "reloaded"]

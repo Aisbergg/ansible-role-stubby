@@ -1,0 +1,71 @@
+---
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family }}.yml"
+
+- name: Ensure Stubby is installed
+  package:
+    name: "{{ stubby_package }}"
+    state: present
+
+- name: Ensure Stubby cache dir exists
+  file:
+    path: /var/cache/stubby
+    state: directory
+    owner: root
+    group: root
+
+- name: Configure Stubby
+  template:
+    src: "stubby-{{ stubby_config_version }}.yml.j2"
+    dest: "{{ stubby_config_location }}"
+    owner: root
+    group: root
+    mode: "0644"
+    lstrip_blocks: true
+    validate: stubby -C "%s" -i
+  vars:
+    cfg: "{{ stubby_config_defauls | combine(stubby_config) }}"
+  notify:
+    - restart stubby
+
+- block:
+  - name: Disable systemd-resolved service
+    service:
+      name: systemd-resolved
+      state: stopped
+      enabled: false
+
+  - name: Check if NetworkManager is available
+    shell: command -v networkctl
+    changed_when: false
+    register: networkctl_available
+
+  - name: Disable the NetworkManager internal DNS resolver
+    ini_file:
+      path: /etc/NetworkManager/NetworkManager.conf
+      section: main
+      option: dns
+      value: "{{ 'none' if stubby_service_enabled else omit }}"
+      mode: 0600
+    when: networkctl_available.stdout != ""
+
+  - name: Ensure Stubby is set as sytem DNS resolver
+    template:
+      src: resolv.conf.j2
+      dest: /etc/resolv.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  when: stubby_service_enabled or stubby_service_state in ["started", "restarted", "reloaded"]
+
+- name: Manage Stubby service
+  service:
+    name: "{{ stubby_service_name }}"
+    state: "{{ stubby_service_state }}"
+    enabled: "{{ stubby_service_enabled }}"

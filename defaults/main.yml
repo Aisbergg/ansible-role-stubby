@@ -1,0 +1,9 @@
+---
+# start Stubby service
+stubby_service_state: started
+
+# enable Stubby service
+stubby_service_enabled: true
+
+# Stubby config variables
+stubby_config: {}
