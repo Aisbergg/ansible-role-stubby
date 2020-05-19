@@ -1,7 +1,7 @@
 ---
 
 # https://raw.githubusercontent.com/getdnsapi/stubby/b0d3154af61e1b46a30b56d239dc074273642217/stubby.yml.example
-_stubby_config_0_2_6:
+__stubby_config_0_2_6:
   # Ordered list composed of one or more transport protocols:
   # GETDNS_TRANSPORT_UDP, GETDNS_TRANSPORT_TCP or GETDNS_TRANSPORT_TLS
   # If only one transport value is specified it will be the only transport used.

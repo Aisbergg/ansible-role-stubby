@@ -2,14 +2,14 @@
 - name: Include OS-specific variables
   include_vars: "{{ item }}"
   with_first_found:
-    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
-    - "{{ ansible_distribution }}.yml"
-    - "{{ ansible_os_family }}-{{ ansible_distribution_major_version }}.yml"
-    - "{{ ansible_os_family }}.yml"
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
 
 - name: Ensure Stubby is installed
   package:
-    name: "{{ stubby_package }}"
+    name: "{{ __stubby_package }}"
     state: present
 
 - name: Ensure Stubby cache dir exists
@@ -21,19 +21,18 @@
 
 - name: Configure Stubby
   template:
-    src: "stubby-{{ stubby_config_version }}.yml.j2"
-    dest: "{{ stubby_config_location }}"
+    src: "stubby-{{ __stubby_config_version }}.yml.j2"
+    dest: "{{ __stubby_config_location }}"
     owner: root
     group: root
-    mode: "0644"
-    lstrip_blocks: true
+    mode: 0644
     validate: stubby -C "%s" -i
   vars:
-    cfg: "{{ stubby_config_defauls | combine(stubby_config) }}"
-  notify:
-    - restart stubby
+    cfg: "{{ __stubby_config_defauls | combine(stubby_config) }}"
+  notify: restart stubby
 
-- block:
+- when: stubby_service_enabled or stubby_service_state != 'stopped'
+  block:
   - name: Disable systemd-resolved service
     service:
       name: systemd-resolved
@@ -52,7 +51,7 @@
       option: dns
       value: "{{ 'none' if stubby_service_enabled else omit }}"
       mode: 0600
-    when: networkctl_available.stdout != ""
+    when: networkctl_available.stdout | length > 0
 
   - name: Ensure Stubby is set as sytem DNS resolver
     template:
@@ -62,10 +61,8 @@
       group: root
       mode: 0644
 
-  when: stubby_service_enabled or stubby_service_state in ["started", "restarted", "reloaded"]
-
 - name: Manage Stubby service
   service:
-    name: "{{ stubby_service_name }}"
+    name: "{{ __stubby_service_name }}"
     state: "{{ stubby_service_state }}"
     enabled: "{{ stubby_service_enabled }}"

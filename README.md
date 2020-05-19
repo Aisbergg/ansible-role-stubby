@@ -2,6 +2,8 @@
 
 This is Ansible role installs and configures the DNS Privacy stub resolver Stubby.
 
+> NOTE: Rather use [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy) instead of stubby, because it has a larger community and offers more features. So checkout my [Ansible role for dnscrypt-proxy](https://github.com/Aisbergg/ansible-role-dnscrypt-proxy).
+
 ## Requirements
 
 None.

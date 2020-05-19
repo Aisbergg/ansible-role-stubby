@@ -1,0 +1,6 @@
+---
+__stubby_package: getdns-stubby
+__stubby_service_name: stubby
+__stubby_config_location: /etc/stubby/stubby.yml
+__stubby_config_version: 0.2.6
+__stubby_config_defauls: "{{ __stubby_config_0_2_6 }}"

@@ -1,6 +1,0 @@
----
-stubby_package: stubby
-stubby_service_name: stubby
-stubby_config_location: /etc/stubby/stubby.yml
-stubby_config_version: 0.2.6
-stubby_config_defauls: "{{ _stubby_config_0_2_6 }}"
